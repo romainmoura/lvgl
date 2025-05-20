@@ -377,6 +377,21 @@
     #endif
 #endif
 
+/** Thread priority of the drawing task.
+ *  Higher values mean higher priority.
+ *  Can use values from lv_thread_prio_t enum in lv_os.h: LV_THREAD_PRIO_LOWEST,
+ *  LV_THREAD_PRIO_LOW, LV_THREAD_PRIO_MID, LV_THREAD_PRIO_HIGH, LV_THREAD_PRIO_HIGHEST
+ *  Make sure the priority value aligns with the OS-specific priority levels.
+ *  On systems with limited priority levels (e.g., FreeRTOS), a higher value can improve
+ *  rendering performance but might cause other tasks to starve. */
+#ifndef LV_DRAW_THREAD_PRIO
+    #ifdef CONFIG_LV_DRAW_THREAD_PRIO
+        #define LV_DRAW_THREAD_PRIO CONFIG_LV_DRAW_THREAD_PRIO
+    #else
+        #define LV_DRAW_THREAD_PRIO LV_THREAD_PRIO_HIGH
+    #endif
+#endif
+
 #ifndef LV_USE_DRAW_SW
     #ifdef LV_KCONFIG_PRESENT
         #ifdef CONFIG_LV_USE_DRAW_SW
@@ -895,10 +910,14 @@
      *  NOTE: which usually improves performance,
      *  but does not guarantee the same rendering quality as the software. */
     #ifndef LV_VG_LITE_USE_BOX_SHADOW
-        #ifdef CONFIG_LV_VG_LITE_USE_BOX_SHADOW
-            #define LV_VG_LITE_USE_BOX_SHADOW CONFIG_LV_VG_LITE_USE_BOX_SHADOW
+        #ifdef LV_KCONFIG_PRESENT
+            #ifdef CONFIG_LV_VG_LITE_USE_BOX_SHADOW
+                #define LV_VG_LITE_USE_BOX_SHADOW CONFIG_LV_VG_LITE_USE_BOX_SHADOW
+            #else
+                #define LV_VG_LITE_USE_BOX_SHADOW 0
+            #endif
         #else
-            #define LV_VG_LITE_USE_BOX_SHADOW 0
+            #define LV_VG_LITE_USE_BOX_SHADOW 1
         #endif
     #endif
 
@@ -1794,14 +1813,14 @@
     #ifdef CONFIG_LV_FONT_SOURCE_HAN_SANS_SC_14_CJK
         #define LV_FONT_SOURCE_HAN_SANS_SC_14_CJK CONFIG_LV_FONT_SOURCE_HAN_SANS_SC_14_CJK
     #else
-        #define LV_FONT_SOURCE_HAN_SANS_SC_14_CJK   0  /**< 1000 most common CJK radicals */
+        #define LV_FONT_SOURCE_HAN_SANS_SC_14_CJK   0  /**< 1338 most common CJK radicals */
     #endif
 #endif
 #ifndef LV_FONT_SOURCE_HAN_SANS_SC_16_CJK
     #ifdef CONFIG_LV_FONT_SOURCE_HAN_SANS_SC_16_CJK
         #define LV_FONT_SOURCE_HAN_SANS_SC_16_CJK CONFIG_LV_FONT_SOURCE_HAN_SANS_SC_16_CJK
     #else
-        #define LV_FONT_SOURCE_HAN_SANS_SC_16_CJK   0  /**< 1000 most common CJK radicals */
+        #define LV_FONT_SOURCE_HAN_SANS_SC_16_CJK   0  /**< 1338 most common CJK radicals */
     #endif
 #endif
 
@@ -3247,6 +3266,17 @@
                 #define LV_PROFILER_BUILTIN_BUF_SIZE (16 * 1024)     /**< [bytes] */
             #endif
         #endif
+        #ifndef LV_PROFILER_BUILTIN_DEFAULT_ENABLE
+            #ifdef LV_KCONFIG_PRESENT
+                #ifdef CONFIG_LV_PROFILER_BUILTIN_DEFAULT_ENABLE
+                    #define LV_PROFILER_BUILTIN_DEFAULT_ENABLE CONFIG_LV_PROFILER_BUILTIN_DEFAULT_ENABLE
+                #else
+                    #define LV_PROFILER_BUILTIN_DEFAULT_ENABLE 0
+                #endif
+            #else
+                #define LV_PROFILER_BUILTIN_DEFAULT_ENABLE 1
+            #endif
+        #endif
     #endif
 
     /** Header to include for profiler */
@@ -4036,6 +4066,13 @@
         #define LV_USE_ILI9341 CONFIG_LV_USE_ILI9341
     #else
         #define LV_USE_ILI9341       0
+    #endif
+#endif
+#ifndef LV_USE_FT81X
+    #ifdef CONFIG_LV_USE_FT81X
+        #define LV_USE_FT81X CONFIG_LV_USE_FT81X
+    #else
+        #define LV_USE_FT81X         0
     #endif
 #endif
 

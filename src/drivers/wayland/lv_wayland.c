@@ -169,8 +169,6 @@ struct application {
     struct xdg_wm_base * xdg_wm;
 #endif
 
-    const char * xdg_runtime_dir;
-
 #ifdef LV_WAYLAND_WINDOW_DECORATIONS
     bool opt_disable_decorations;
 #endif
@@ -248,6 +246,7 @@ struct window {
  *********************************/
 
 static struct application application;
+static bool wayland_initialized = false;
 
 static void color_fill(void * pixels, lv_color_t color, uint32_t width, uint32_t height);
 static void color_fill_XRGB8888(void * pixels, lv_color_t color, uint32_t width, uint32_t height);
@@ -1226,24 +1225,9 @@ static void xdg_toplevel_handle_close(void * data, struct xdg_toplevel * xdg_top
     LV_UNUSED(xdg_toplevel);
 }
 
-static void xdg_toplevel_handle_configure_bounds(void * data, struct xdg_toplevel * xdg_toplevel,
-                                                 int32_t width, int32_t height)
-{
-
-    LV_UNUSED(width);
-    LV_UNUSED(height);
-    LV_UNUSED(data);
-    LV_UNUSED(xdg_toplevel);
-
-    /* Optional: Could set window width/height upper bounds, however, currently
-     *           we'll honor the set width/height.
-     */
-}
-
 static const struct xdg_toplevel_listener xdg_toplevel_listener = {
     .configure = xdg_toplevel_handle_configure,
     .close = xdg_toplevel_handle_close,
-    .configure_bounds = xdg_toplevel_handle_configure_bounds
 };
 
 static void xdg_wm_base_ping(void * data, struct xdg_wm_base * xdg_wm_base, uint32_t serial)
@@ -1291,8 +1275,8 @@ static void handle_global(void * data, struct wl_registry * registry,
 #endif
 #if LV_WAYLAND_XDG_SHELL
     else if(strcmp(interface, xdg_wm_base_interface.name) == 0) {
-        /* Explicitly support version 4 of the xdg protocol */
-        app->xdg_wm = wl_registry_bind(app->registry, name, &xdg_wm_base_interface, 4);
+        /* supporting version 2 of the XDG protocol - ensures greater compatibility */
+        app->xdg_wm = wl_registry_bind(app->registry, name, &xdg_wm_base_interface, 2);
         xdg_wm_base_add_listener(app->xdg_wm, &xdg_wm_base_listener, app);
     }
 #endif
@@ -2078,6 +2062,8 @@ static struct window * create_window(struct application * app, int width, int he
         // An (XDG) surface commit (without an attached buffer) triggers this
         // configure event
         window->body->surface_configured = false;
+        wl_surface_commit(window->body->surface);
+        wl_display_roundtrip(application.display);
     }
 #endif
 #if LV_WAYLAND_WL_SHELL
@@ -2410,6 +2396,11 @@ static void _lv_wayland_touch_read(lv_indev_t * drv, lv_indev_data_t * data)
  */
 static void wayland_init(void)
 {
+    /* Prevent reinitializing wayland */
+    if(wayland_initialized) {
+        return;
+    }
+
     struct smm_events evs = {
         NULL,
         sme_new_pool,
@@ -2419,9 +2410,6 @@ static void wayland_init(void)
         sme_init_buffer,
         sme_free_buffer
     };
-
-    application.xdg_runtime_dir = getenv("XDG_RUNTIME_DIR");
-    LV_ASSERT_MSG(application.xdg_runtime_dir, "cannot get XDG_RUNTIME_DIR");
 
     // Create XKB context
     application.xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
@@ -2476,6 +2464,7 @@ static void wayland_init(void)
     /* Used to wait for events when the window is minimized or hidden */
     application.wayland_pfd.fd = wl_display_get_fd(application.display);
     application.wayland_pfd.events = POLLIN;
+    wayland_initialized = true;
 
 }
 
@@ -2586,6 +2575,9 @@ lv_display_t * lv_wayland_window_create(uint32_t hor_res, uint32_t ver_res, char
         LV_LOG_ERROR("failed to create wayland window");
         return NULL;
     }
+#if LV_WAYLAND_XDG_SHELL
+    LV_ASSERT_MSG(window->body->surface_configured, "Failed to receive the xdg_surface configuration event");
+#endif
 
     window->close_cb = close_cb;
 
@@ -2871,13 +2863,6 @@ bool lv_wayland_timer_handler(void)
             /* Resume lvgl on the next cycle */
             return false;
 
-        }
-        else if(window != NULL && window->body->surface_configured == false) {
-            /* Initial commit to trigger the configure event */
-            /* Manually dispatching the queue is necessary, */
-            /* to emit the configure event straight away */
-            wl_surface_commit(window->body->surface);
-            wl_display_dispatch(application.display);
         }
         else if(window != NULL && window->resize_pending) {
             if(resize_window(window, window->resize_width, window->resize_height)) {
